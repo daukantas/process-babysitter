@@ -22,18 +22,28 @@ module.exports = function(CONFIG) {
   var processes = _.chain(CONFIG.processes)
     .filter({enabled: true})
     .map(function(v, k) {
-      return {
+      var obj = {
         id: v.id,
         config: v,
         status: 'stopped',
         stdout_100: [],
         stderr_100: [],
-        command_tpl: _.template(v.command),
-        cwd_tpl: _.template(v.cwd),
-        args_tpls: _.map(v.args, function(v) {
-          return _.template(v);
-        }),
+        command_tpl: _.template(v.command)
       };
+
+      if(v.cwd) obj.cwd_tpl = _.template(v.cwd);
+      if(v.args) {
+        obj.args_tpls = _.map(v.args, function(v) {
+          return _.template(v);
+        });
+      }
+      if(v.env) {
+        obj.env_tpls = _.mapValues(v.env, function(v) {
+          return _.template(v);
+        });
+      }
+
+      return obj;
     })
     .keyBy('config.id')
     .value();
@@ -64,12 +74,24 @@ module.exports = function(CONFIG) {
     if(!processes[req.params.id]) return res.sendStatus(404);
     var proc = processes[req.params.id];
 
+    debugger
+
+    var opts = {};
+    if(proc.cwd_tpl) opts.cwd = proc.cwd_tpl(CONFIG.template_vars || {});
+    if(proc.env_tpls) opts.env = _.extend(
+      {},
+      process.env,
+      _.mapValues(proc.env_tpls, function(v) {
+        return v(CONFIG.template_vars || {});
+      })
+    );
+
     // don't start if already running
     if(proc.child) return res.sendStatus(200);
     proc.child = spawn(
-      proc.command_tpl(CONFIG.template_vars),
-      _.map(proc.args_tpls, function(v) { return v(CONFIG.template_vars); }),
-      {cwd: proc.cwd_tpl(CONFIG.template_vars)}
+      proc.command_tpl(CONFIG.template_vars || {}),
+      _.mapValues(proc.args_tpls, function(v) { return v(CONFIG.template_vars || {}); }),
+      opts
     );
 
     // on exit, notify & remove child obj

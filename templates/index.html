@@ -212,7 +212,6 @@
       _onStartedEvt: function() {
         this.$('.status').html('(started)');
         this.$el.removeClass('stopped').addClass('started');
-        this.model.sendStart();
       },
       _onStoppedEvt: function() {
         this.$('.status').html('(stopped)');
